@@ -13,34 +13,35 @@ import (
 
 // A Node represents a vertex in the stage tree, plus references to its child nodes.
 type Node struct {
-	id      string
-	tag     string
-	stage   string
-	nodes   []*Node
+	Id      string
+	Tag     string
+	Stage   string
+	Nodes   []*Node
 	visited bool
-	weight  int
-	outcome string
 }
 
-// newNode returns a new Node with an empty sub-tree of nodes.
-func newNode(id, tag, stage string) *Node {
+// NewNode returns a new Node with an empty sub-tree of nodes.
+func NewNode(id, tag, stage string) *Node {
 	return &Node{
-		id:      id,
-		tag:     tag,
-		stage:   stage,
-		nodes:   make([]*Node, 0),
+		Id:      id,
+		Tag:     tag,
+		Stage:   stage,
+		Nodes:   make([]*Node, 0),
 		visited: false,
 	}
 }
 
 // AddChild adds the given Node to the subtree of the instance.
 func (root *Node) AddChild(child *Node) {
-	root.nodes = append(root.nodes, child)
+	root.Nodes = append(root.Nodes, child)
 }
 
-func plotStages(graph *godraw.GraphModel, stageDepths map[string]int) error {
-	keys := make([]string, 0, len(stageDepths))
-	for k := range stageDepths {
+func PlotStages(graph *godraw.GraphModel, rootNode *Node) error {
+	maxDepth := make(map[string]int)
+	probeDepth(rootNode, "", 0, maxDepth)
+
+	keys := make([]string, 0, len(maxDepth))
+	for k := range maxDepth {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -49,7 +50,7 @@ func plotStages(graph *godraw.GraphModel, stageDepths map[string]int) error {
 
 	for _, k := range keys {
 		stageOffsets[k] = offset + hSpacing/2 - 5
-		width := hSpacing * stageDepths[k]
+		width := hSpacing * maxDepth[k]
 		shape := godraw.Cell{
 			ID:       k,
 			Value:    k,
@@ -70,9 +71,29 @@ func plotStages(graph *godraw.GraphModel, stageDepths map[string]int) error {
 	return nil
 }
 
-func plotTree(graph *godraw.GraphModel, root *Node) error {
+func PlotTree(graph *godraw.GraphModel, root *Node) error {
 	addNodes(root, graph, hSpacing/2-5, vSpacing+5, "")
 	return nil
+}
+
+func probeDepth(root *Node, currentStage string, stageDepth int, maxDepth map[string]int) {
+	if root == nil {
+		return
+	}
+
+	if currentStage == root.Stage {
+		stageDepth++
+	} else {
+		stageDepth = 1
+	}
+
+	if maxDepth[root.Stage] < stageDepth {
+		maxDepth[root.Stage] = stageDepth
+	}
+
+	for _, n := range root.Nodes {
+		probeDepth(n, root.Stage, stageDepth, maxDepth)
+	}
 }
 
 func addNodes(root *Node, graph *godraw.GraphModel, x, y int, parent string) (int, int) {
@@ -85,21 +106,21 @@ func addNodes(root *Node, graph *godraw.GraphModel, x, y int, parent string) (in
 	}
 
 	root.visited = true
-	value := root.tag
+	value := root.Tag
 
 	if value == parent {
 		value = ""
 	}
 
-	if x < stageOffsets[root.stage] {
-		x = stageOffsets[root.stage]
+	if x < stageOffsets[root.Stage] {
+		x = stageOffsets[root.Stage]
 	}
 
 	shape := godraw.Cell{
-		ID:       root.id,
+		ID:       root.Id,
 		ParentID: "layer1",
 		Value:    value,
-		Style:    eventNodeStyle(root.stage),
+		Style:    eventNodeStyle(root.Stage),
 		Vertex:   "1",
 		Geometry: &godraw.Geometry{
 			X:      x,
@@ -112,12 +133,12 @@ func addNodes(root *Node, graph *godraw.GraphModel, x, y int, parent string) (in
 
 	x += hSpacing
 
-	for i, n := range root.nodes {
+	for i, n := range root.Nodes {
 		if i > 0 {
 			y += vSpacing
 		}
-		_, y = addNodes(n, graph, x, y, root.tag)
-		addLink(graph, root.id, n.id)
+		_, y = addNodes(n, graph, x, y, root.Tag)
+		addLink(graph, root.Id, n.Id)
 	}
 
 	return x, y

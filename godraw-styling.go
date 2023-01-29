@@ -1,3 +1,5 @@
+// Copyright 2023 by Paulo Queiroga. All rights reserved.
+// Use of this source code is governed by the license that can be found in the LICENSE file.
 package stagetree
 
 import "github.com/pauloqueiroga/godraw"

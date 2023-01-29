@@ -1,4 +1,8 @@
-package stagetree
+// Copyright 2023 by Paulo Queiroga. All rights reserved.
+// Use of this source code is governed by the license that can be found in the LICENSE file.
+
+// Command-Line Interface (CLI) for creating a new stage tree diagram with data from a Comma-Separated-Values (CSV) file.
+package main
 
 import (
 	"encoding/csv"
@@ -7,9 +11,9 @@ import (
 	"io"
 	"log"
 	"os"
-	"sort"
 
 	"github.com/pauloqueiroga/godraw"
+	st "github.com/pauloqueiroga/stage-tree"
 )
 
 type event struct {
@@ -17,15 +21,12 @@ type event struct {
 	source2  string
 	source3  string
 	outcome  string
-	treeNode *Node
+	treeNode *st.Node
 }
 
-var maxDepth = make(map[string]int)
-
-// Command-Line Interface (CLI) for creating a new stage tree diagram with data obtained from a Comma-Separated-Values (CSV) file.
 func main() {
 	if len(os.Args) < 3 {
-		log.Fatal("Usage: stagetree <path/to/input-file.csv> <path/to/output-file.drawio")
+		log.Fatal("Usage: tree-from-csv <path/to/input-file.csv> <path/to/output-file.drawio")
 	}
 
 	events, err := readEvents(os.Args[1])
@@ -38,15 +39,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	weighTree(tree, "", 0)
-
 	graph := godraw.NewGraph("layer1")
 
-	if err = plotStages(&graph, maxDepth); err != nil {
+	if err = st.PlotStages(&graph, tree); err != nil {
 		log.Fatal(err)
 	}
 
-	if err = plotTree(&graph, tree); err != nil {
+	if err = st.PlotTree(&graph, tree); err != nil {
 		log.Fatal(err)
 	}
 
@@ -100,7 +99,7 @@ func readEvents(filePath string) (map[string]event, error) {
 			source2:  row[3],
 			source3:  row[4],
 			outcome:  row[6],
-			treeNode: newNode(row[0], row[1], row[5]),
+			treeNode: st.NewNode(row[0], row[1], row[5]),
 		}
 		result[row[0]] = e
 
@@ -108,7 +107,7 @@ func readEvents(filePath string) (map[string]event, error) {
 			oid := row[0] + e.outcome
 			o := event{
 				source1:  row[0],
-				treeNode: newNode(oid, "outcome: "+e.outcome, "outcome"),
+				treeNode: st.NewNode(oid, e.outcome, "outcome"),
 			}
 			result[oid] = o
 		}
@@ -117,8 +116,8 @@ func readEvents(filePath string) (map[string]event, error) {
 	return result, nil
 }
 
-func makeTree(events map[string]event) (*Node, error) {
-	var root *Node = nil
+func makeTree(events map[string]event) (*st.Node, error) {
+	var root *st.Node = nil
 
 	for id, event := range events {
 		if id == "0" {
@@ -151,58 +150,4 @@ func makeTree(events map[string]event) (*Node, error) {
 	}
 
 	return root, nil
-}
-
-func weighTree(root *Node, currentStage string, stageDepth int) (string, int) {
-	if root == nil {
-		return "", 0
-	}
-
-	weight := 1
-
-	if currentStage == root.stage {
-		stageDepth++
-	} else {
-		stageDepth = 1
-	}
-
-	if maxDepth[root.stage] < stageDepth {
-		maxDepth[root.stage] = stageDepth
-	}
-
-	for _, n := range root.nodes {
-		o, w := weighTree(n, root.stage, stageDepth)
-		weight += w
-
-		if root.outcome == "" {
-			root.outcome = o
-		}
-	}
-
-	if root.stage == "outcome" {
-		root.outcome = root.tag
-	}
-
-	root.weight = weight
-	sort.Slice(root.nodes, func(i, j int) bool {
-		if root.nodes[i].tag < root.nodes[j].tag {
-			return true
-		}
-
-		if root.nodes[i].tag > root.nodes[j].tag {
-			return false
-		}
-
-		if root.nodes[i].weight > root.nodes[j].weight {
-			return true
-		}
-
-		if root.nodes[i].weight < root.nodes[j].weight {
-			return false
-		}
-
-		return root.nodes[i].outcome < root.nodes[j].outcome
-	})
-
-	return root.outcome, weight
 }
