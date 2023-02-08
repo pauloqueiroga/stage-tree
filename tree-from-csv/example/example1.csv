@@ -11,9 +11,9 @@ id, tag, sourceId1, sourceId2, sourceId3, stage, outcome
 9,sample 1,8,,,4 test,pass
 10,sample 2,2,,,2 brew,
 11,sample 2,10,,,4 test,
+14,sample 2,10,,,4 test,
 12,sample 2,10,,,3 rest,
 13,sample 2,12,,,4 test,
-14,sample 2,10,,,4 test,
 15,sample 2,11,13,14,4 test,
 16,sample 2,15,,,4 test, inconclusive
 17,sample 3,3,,,2 brew,
