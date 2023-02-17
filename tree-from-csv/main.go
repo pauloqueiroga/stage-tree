@@ -26,7 +26,7 @@ type event struct {
 
 func main() {
 	if len(os.Args) < 3 {
-		log.Fatal("Usage: tree-from-csv <path/to/input-file.csv> <path/to/output-file.drawio")
+		log.Fatal("Usage: tree-from-csv <path/to/input-file.csv> <path/to/output-file.drawio>")
 	}
 
 	events, err := readEvents(os.Args[1])
