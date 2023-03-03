@@ -132,6 +132,13 @@ func addNodes(root *Node, graph *godraw.GraphModel, x, y int, parent string) (in
 	graph.Add(&shape)
 
 	x += hSpacing
+	sort.Slice(root.Nodes, func(i, j int) bool {
+		if root.Nodes[i].Stage == root.Nodes[j].Stage {
+			return root.Nodes[i].Tag < root.Nodes[j].Tag
+		}
+
+		return root.Nodes[i].Stage > root.Nodes[j].Stage
+	})
 
 	for i, n := range root.Nodes {
 		if i > 0 {
