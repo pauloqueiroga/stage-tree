@@ -41,6 +41,27 @@ function assertEqual(actual, expected, message) {
   if (a !== b) throw new Error(`${message ?? 'not equal'}\n    expected: ${b}\n    actual:   ${a}`);
 }
 
+// ------------------------------------------------------------------ parsing
+
+// `node --check` parses a .js file as a script, not a module, and lets malformed
+// ES modules through with exit 0 — so it is not a syntax gate. Actually importing
+// each file is. app.js has no other coverage here, since it touches the DOM as
+// soon as it loads, which makes this its only automated check.
+for (const file of ['style.js', 'csv.js', 'model.js', 'layout.js', 'render.js', 'app.js']) {
+  try {
+    await import(`../js/${file}`);
+    passed++;
+  } catch (err) {
+    if (err instanceof SyntaxError) {
+      failures.push({ name: `${file} parses`, message: err.message });
+    } else {
+      // Anything else means it parsed and then tried to touch a browser global,
+      // which is expected for the files that draw or wire up the page.
+      passed++;
+    }
+  }
+}
+
 // ------------------------------------------------------------------- CSV
 
 check('parseCsv handles quotes, escaped quotes and CRLF', () => {

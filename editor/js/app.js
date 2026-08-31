@@ -367,7 +367,7 @@ function renderProperties() {
         placeholder: 'label shown under the node',
         onchange: (e) => setField(node.id, 'tag', e.target.value.trim()),
       }),
-      h('p', { class: 'hint' }, 'A node repeating its parent's tag is drawn without a label, so a chain reads as one run.'),
+      h('p', { class: 'hint' }, 'A node repeating the tag of its parent is drawn without a label, so a chain reads as one run.'),
     ]),
 
     h('div', { class: 'field' }, [
