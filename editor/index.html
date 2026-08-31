@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stage Tree Editor</title>
+<link rel="stylesheet" href="editor.css">
+</head>
+<body>
+
+<header class="toolbar">
+  <h1>Stage Tree Editor</h1>
+
+  <div class="group">
+    <button id="btn-new" title="Start a new tree">New</button>
+    <button id="btn-import" title="Load a stage-tree CSV">Import CSV</button>
+    <button id="btn-example" title="Load tree-from-csv/example/example1.csv">Example</button>
+  </div>
+
+  <div class="group">
+    <button id="btn-export-csv" class="primary" title="Save as CSV (Ctrl+S)">Export CSV</button>
+    <button id="btn-export-svg" title="Save a picture of the diagram">Export SVG</button>
+  </div>
+
+  <div class="group">
+    <button id="btn-add" title="Add a node below the selection (Enter)">Add node</button>
+    <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="btn-redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+  </div>
+
+  <div class="group">
+    <button id="btn-zoom-out" title="Zoom out">−</button>
+    <button id="btn-zoom-in" title="Zoom in">+</button>
+    <button id="btn-fit" title="Fit the diagram to the window">Fit</button>
+  </div>
+
+  <input type="file" id="file-input" accept=".csv,text/csv" hidden>
+</header>
+
+<main>
+  <div id="canvas" class="canvas-wrap"></div>
+
+  <aside id="sidebar">
+    <section>
+      <h2>Selection</h2>
+      <div id="panel-properties"></div>
+    </section>
+
+    <section>
+      <h2>Stages</h2>
+      <div id="panel-stages"></div>
+    </section>
+
+    <section>
+      <h2>Checks</h2>
+      <div id="panel-issues"></div>
+    </section>
+
+    <section>
+      <h2>How to edit</h2>
+      <ul class="keys">
+        <li><b>Drag</b> node → node to link them</li>
+        <li><b>Click</b> to select, <b>Enter</b> to add a child</li>
+        <li><b>Double-click</b> empty space for a new node</li>
+        <li><b>Del</b> removes the selection</li>
+        <li><b>Drag</b> the background to pan, <b>wheel</b> to zoom</li>
+      </ul>
+      <p class="hint">Positions are computed, not stored: the CSV has no coordinate
+      columns, so the layout is derived the same way tree-from-csv derives it.</p>
+    </section>
+  </aside>
+</main>
+
+<footer>
+  <span id="status"></span>
+</footer>
+
+<div id="toast" class="toast"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
