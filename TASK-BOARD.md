@@ -22,6 +22,7 @@ A lightweight Kanban-style board, version-controlled alongside the code.
 - Add automated tests for `stage-tree.go`, `godraw-styling.go`, and `tree-from-csv/main.go` (none exist yet)
 - Make `tree-from-csv` output deterministic. `addNodes` in `stage-tree.go` orders siblings with `sort.Slice` (not stable) over a child list built by ranging over a map, so siblings tied on both stage and tag come out in an arbitrary order that changes between runs. Six runs over `example1.csv` placed node 9 at y=85, 85, 45, 45, 85, 125 — meaning the committed example `.drawio`/`.svg` files cannot be regenerated reliably. Fix by making `makeTree` build children in CSV row order and using `sort.SliceStable`, then regenerate the examples.
 - Allow user to select name of files when saving CSV and SVG from the editor.
+- Make the stage title panel at the top word-wrap and resize if needed to fit its contents neatly.
 
 ## In Progress
 
