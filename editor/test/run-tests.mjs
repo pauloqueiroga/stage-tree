@@ -15,6 +15,7 @@ import {
 } from '../js/model.js';
 import { buildPlotGraph, layout } from '../js/layout.js';
 import { linkPath } from '../js/render.js';
+import { NODE_RADIUS } from '../js/style.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const example = (name) => readFileSync(join(root, 'tree-from-csv', 'example', name), 'utf8');
@@ -301,6 +302,59 @@ check('layout draws every link in the document', () => {
   assertEqual(outcomeLink.ownerId, '7');
 });
 
+// --------------------------------------------------------- merged outcomes
+
+check('merged outcomes become one node per distinct value', () => {
+  const plot = buildPlotGraph(docFromCsv(example('example1.csv')), { mergeOutcomes: true });
+  assertEqual(plot.nodes.size, 22, '19 rows + 3 distinct outcomes (pass twice)');
+
+  const synthetic = [...plot.nodes.values()].filter((n) => n.synthetic);
+  assertEqual(synthetic.map((n) => n.id).sort(), ['outcome:fail', 'outcome:inconclusive', 'outcome:pass']);
+
+  const pass = plot.nodes.get('outcome:pass');
+  assertEqual([pass.tag, pass.stage, pass.ownerId, pass.owners], ['pass', 'outcome', null, ['6', '9']]);
+  assert(plot.children.get('6').includes('outcome:pass'), 'node 6 points at the shared outcome');
+  assert(plot.children.get('9').includes('outcome:pass'), 'node 9 points at the same one');
+});
+
+check('merged outcomes keep one link per owner', () => {
+  const doc = docFromCsv(example('example1.csv'));
+  const diagram = layout(doc, { mergeOutcomes: true });
+  assertEqual(diagram.nodes.length, 22);
+  assertEqual(diagram.links.length, layout(doc).links.length, 'same links, fewer targets');
+
+  const toPass = diagram.links.filter((l) => l.targetId === 'outcome:pass');
+  assertEqual(toPass.map((l) => l.ownerId).sort(), ['6', '9'], 'each link is owned by its source row');
+  assert(toPass.every((l) => l.synthetic));
+});
+
+check('merged outcome nodes sit in the outcome column without overlapping', () => {
+  for (const name of ['example1.csv', 'example2.csv']) {
+    const diagram = layout(docFromCsv(example(name)), { mergeOutcomes: true });
+    const column = diagram.stages.find((s) => s.name === 'outcome');
+    const outcomes = diagram.nodes.filter((n) => n.synthetic);
+    assert(outcomes.every((n) => n.cx >= column.x && n.cx <= column.x + column.width), `${name}: outcome escapes its column`);
+    const spots = new Set(outcomes.map((n) => `${n.cx},${n.cy}`));
+    assertEqual(spots.size, outcomes.length, `${name}: two outcome nodes share a position`);
+  }
+});
+
+check('merging does not change the CSV', () => {
+  const doc = docFromCsv(example('example1.csv'));
+  const before = csvFromDoc(doc);
+  layout(doc, { mergeOutcomes: true });
+  assertEqual(csvFromDoc(doc), before);
+});
+
+check('a merged outcome does not collide with a row id', () => {
+  const doc = docFromCsv('id,tag,s1,s2,s3,stage,outcome\n0,a,,,,1 x,ok\noutcome:ok,b,0,,,1 x,ok\n');
+  const plot = buildPlotGraph(doc, { mergeOutcomes: true });
+  assertEqual(plot.nodes.size, 3);
+  const shared = [...plot.nodes.values()].find((n) => n.synthetic);
+  assertEqual(shared.owners, ['0', 'outcome:ok']);
+  assert(plot.nodes.get('outcome:ok').synthetic === false, 'the real row keeps its id');
+});
+
 check('layout is deterministic', () => {
   const doc = docFromCsv(example('example2.csv'));
   const first = layout(doc).nodes.map((n) => [n.id, n.cx, n.cy]);
@@ -350,6 +404,33 @@ check('a connector survives nodes that nearly touch', () => {
   const path = linkPath({ source: { cx: 40, cy: 50 }, target: { cx: 52, cy: 90 } });
   assert(!path.includes('NaN'), path);
   assertEqual((path.match(/Q/g) ?? []).length, 2);
+});
+
+check('a connector spanning several columns turns just before its target', () => {
+  // Three columns apart: the midpoint (x 160) is a column centre where nodes sit.
+  const path = linkPath({ source: { cx: 40, cy: 50 }, target: { cx: 280, cy: 170 } });
+  const turns = [...path.matchAll(/Q (-?[\d.]+)/g)].map((m) => Number(m[1]));
+  assertEqual(turns, [255, 255], `vertical run in the lane before the target: ${path}`);
+});
+
+check('no connector runs its vertical through a node', () => {
+  // example2 with merged outcomes used to send four connectors through node 53.
+  const vertical = /Q (-?[\d.]+) -?[\d.]+ -?[\d.]+ -?[\d.]+/;
+  for (const name of ['example1.csv', 'example2.csv']) {
+    for (const mergeOutcomes of [false, true]) {
+      const diagram = layout(docFromCsv(example(name)), { mergeOutcomes });
+      for (const link of diagram.links) {
+        const match = linkPath(link).match(vertical);
+        if (!match) continue;
+        const x = Number(match[1]);
+        const top = Math.min(link.source.cy, link.target.cy);
+        const bottom = Math.max(link.source.cy, link.target.cy);
+        const crossed = diagram.nodes.find((n) => n !== link.source && n !== link.target &&
+          Math.abs(n.cx - x) <= NODE_RADIUS && n.cy > top && n.cy < bottom);
+        assert(!crossed, `${name}${mergeOutcomes ? ' (merged)' : ''}: ${link.id} runs through node ${crossed && crossed.id}`);
+      }
+    }
+  }
 });
 
 // ------------------------------------------------------------------ report

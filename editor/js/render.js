@@ -5,7 +5,7 @@
 // nodes colored by stage with their tag underneath, and elbow connectors between
 // them. See tree-from-csv/example/*.svg for the reference output.
 
-import { NODE_RADIUS, FONT_FAMILY, FONT_SIZE, HEADER_FONT_COLOR, NODE_FONT_COLOR } from './style.js';
+import { H_SPACING, NODE_RADIUS, FONT_FAMILY, FONT_SIZE, HEADER_FONT_COLOR, NODE_FONT_COLOR } from './style.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -76,9 +76,15 @@ export function linkPath(link) {
 
   if (sy === ty) return `M ${sx} ${sy} L ${tx} ${ty}`;
 
-  // The turn happens midway between the two stubs, so parallel connectors between
-  // the same pair of columns stack up neatly instead of crossing.
-  const mid = Math.max(Math.min((sx + STUB + tx - STUB) / 2, tx - 8), sx + 8);
+  // Between neighbouring columns the turn happens midway between the two stubs, so
+  // parallel connectors stack up neatly instead of crossing. Nodes sit on column
+  // centres, so a connector spanning an even number of columns would put that
+  // midpoint right on the middle column's nodes and run its vertical through them.
+  // A longer connector therefore turns in the empty lane just before the target's
+  // column, which also gathers the arrows into a merged outcome into one trunk.
+  const spansColumns = link.target.cx - link.source.cx > H_SPACING;
+  const turn = spansColumns ? tx - STUB : (sx + STUB + tx - STUB) / 2;
+  const mid = Math.max(Math.min(turn, tx - 8), sx + 8);
   const vertical = Math.sign(ty - sy);
   const into = Math.sign(mid - sx) || 1;
   const outOf = Math.sign(tx - mid) || 1;
@@ -140,8 +146,11 @@ function renderLinks(layer, links, selection) {
 function renderNodes(layer, nodes, selection, hoverId) {
   layer.replaceChildren();
   for (const node of nodes) {
-    const selected = selection && selection.type === 'node' &&
-      (selection.id === node.id || selection.id === node.ownerId);
+    // An outcome node lights up with any of its owners, and a merged one also
+    // when its outcome value itself is selected.
+    const selected = selection && (
+      (selection.type === 'node' && (selection.id === node.id || node.owners.includes(selection.id))) ||
+      (selection.type === 'outcome' && node.synthetic && selection.value === node.tag));
     const classes = ['node'];
     if (selected) classes.push('is-selected');
     if (node.synthetic) classes.push('is-synthetic');
@@ -184,7 +193,7 @@ function renderNodes(layer, nodes, selection, hoverId) {
 
     const title = el('title');
     title.textContent = node.synthetic
-      ? `outcome "${node.tag}" of node ${node.ownerId}`
+      ? `outcome "${node.tag}" of node${node.owners.length === 1 ? '' : 's'} ${node.owners.join(', ')}`
       : `id ${node.id}${node.tag ? ` · ${node.tag}` : ''}${node.stage ? ` · ${node.stage}` : ''}`;
     group.appendChild(title);
 
