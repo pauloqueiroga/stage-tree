@@ -34,6 +34,12 @@ Work in progress is kept in `localStorage`, so closing the tab does not lose it.
 That is a convenience, not a filing system: **Export CSV** is how work leaves the
 editor.
 
+**Export CSV** and **Export SVG** ask for a file name before saving. Browsers with
+the File System Access API (Chrome, Edge) open a native save dialog, which also
+picks the folder; others ask for a name and save it to the downloads folder. The
+name chosen for the CSV becomes the document's name, and the next SVG export
+suggests the same name with an `.svg` extension.
+
 ### Positions are computed, not stored
 
 The CSV has no coordinate columns, so there is nothing for hand-placed positions

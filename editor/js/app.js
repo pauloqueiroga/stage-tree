@@ -757,10 +757,65 @@ function download(name, content, type) {
   URL.revokeObjectURL(url);
 }
 
-function exportCsv() {
-  const name = state.fileName.endsWith('.csv') ? state.fileName : `${state.fileName}.csv`;
-  download(name, csvFromDoc(state.doc), 'text/csv');
-  toast(`Saved ${name}.`, 'ok');
+// withExtension makes sure a file name ends in the given extension (".csv").
+function withExtension(name, extension) {
+  return name.toLowerCase().endsWith(extension) ? name : `${name}${extension}`;
+}
+
+// saveFile asks the user where to save, then writes the content. It resolves to
+// the chosen file name, or null if the user cancelled. Browsers with the File
+// System Access API get a native save dialog; the rest get a name prompt and a
+// download, since a plain download cannot choose the folder.
+async function saveFile(suggestedName, content, type, extension, description) {
+  if (window.showSaveFilePicker) {
+    let handle;
+    try {
+      handle = await window.showSaveFilePicker({
+        suggestedName,
+        types: [{ description, accept: { [type]: [extension] } }],
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') return null;
+      throw err;
+    }
+    const writable = await handle.createWritable();
+    await writable.write(content);
+    await writable.close();
+    return handle.name;
+  }
+
+  const answer = prompt('Save as:', suggestedName);
+  if (answer === null || answer.trim() === '') return null;
+  const name = withExtension(answer.trim(), extension);
+  download(name, content, type);
+  return name;
+}
+
+async function exportCsv() {
+  try {
+    const name = await saveFile(withExtension(state.fileName, '.csv'), csvFromDoc(state.doc), 'text/csv', '.csv', 'CSV file');
+    if (name === null) return;
+    // The CSV is the document, so its name becomes the document's name.
+    state.fileName = name;
+    save();
+    renderStatus();
+    toast(`Saved ${name}.`, 'ok');
+  } catch (err) {
+    toast(`Could not save the CSV: ${err.message}`, 'error');
+    console.warn(err);
+  }
+}
+
+async function exportSvgFile() {
+  try {
+    const suggested = state.fileName.replace(/\.csv$/i, '') + '.svg';
+    const name = await saveFile(suggested, exportSvg(shell, state.diagram), 'image/svg+xml', '.svg', 'SVG image');
+    if (name === null) return;
+    toast(`Saved ${name}.`, 'ok');
+  } catch (err) {
+    toast(`Could not save the SVG: ${err.message}`, 'error');
+    console.warn(err);
+  }
 }
 
 function loadCsvText(text, fileName) {
@@ -854,10 +909,7 @@ function bindToolbar() {
   document.getElementById('btn-new').addEventListener('click', newDocument);
   document.getElementById('btn-example').addEventListener('click', loadExample);
   document.getElementById('btn-export-csv').addEventListener('click', exportCsv);
-  document.getElementById('btn-export-svg').addEventListener('click', () => {
-    download(state.fileName.replace(/\.csv$/i, '') + '.svg', exportSvg(shell, state.diagram), 'image/svg+xml');
-    toast('Saved an SVG snapshot.', 'ok');
-  });
+  document.getElementById('btn-export-svg').addEventListener('click', exportSvgFile);
   document.getElementById('btn-add').addEventListener('click', createNode);
   document.getElementById('btn-fit').addEventListener('click', fitToView);
   document.getElementById('btn-zoom-in').addEventListener('click', () => zoomBy(1.2));
