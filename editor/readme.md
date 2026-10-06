@@ -28,6 +28,7 @@ Then open <http://localhost:8000/editor/>. Any static file server works.
 | Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` |
 | Save | **Export CSV**, or `Ctrl+S` |
 | Navigate | Drag the background to pan, wheel to zoom, **Fit** to frame everything |
+| Share outcome nodes | The **Merge outcomes** toggle (see [Merge outcomes](#merge-outcomes)) |
 
 Work in progress is kept in `localStorage`, so closing the tab does not lose it.
 That is a convenience, not a filing system: **Export CSV** is how work leaves the
@@ -60,6 +61,25 @@ outcome, stage = `outcome`), which is what `readEvents` in `tree-from-csv/main.g
 does. Those leaves are drawn but not directly editable: clicking one selects the
 node it belongs to. Because they are synthesized rather than stored, they never
 leak into the CSV as rows of their own.
+
+#### Merge outcomes
+
+The **Merge outcomes** toggle in the toolbar switches to a second way of drawing
+them: one node per *distinct* outcome value (id = `outcome:` + outcome), with an
+arrow from every node that carries it. In `example1.csv`, nodes 6 and 9 both end in
+`pass`, so they point at the same `pass` node instead of each getting their own.
+
+- It is a view setting, kept with the autosave but not in the CSV, which is the
+  same either way. `tree-from-csv` always draws one outcome node per row.
+- A shared outcome sits on the row of the first node that reaches it in the layout.
+  The arrows from the others run along their own row and turn in the empty lane just
+  before the outcome column, so they meet in one trunk and never pass through a
+  node. (Any connector spanning more than one column turns there, for the same reason.)
+- Clicking a shared outcome selects the outcome value: the **Selection** panel lists
+  every node with it, and `Del` clears it from all of them. To change a single
+  node's outcome, select that node.
+- Outcomes are matched exactly, after the import trims whitespace, so `Pass` and
+  `pass` stay two nodes.
 
 ## What round-trips, and what does not
 

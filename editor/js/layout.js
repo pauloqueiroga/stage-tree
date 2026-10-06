@@ -25,9 +25,11 @@ import { OUTCOME_STAGE, ROOT_ID } from './model.js';
 const PROBE_BUDGET = 500000;
 
 // buildPlotGraph expands the document into the graph that actually gets drawn,
-// synthesizing one leaf node per outcome exactly as readEvents does in
-// tree-from-csv/main.go (id = row id + outcome, tag = outcome, stage = "outcome").
-export function buildPlotGraph(doc) {
+// synthesizing outcome leaves. By default there is one per row, exactly as readEvents
+// does in tree-from-csv/main.go (id = row id + outcome, tag = outcome, stage = "outcome").
+// With mergeOutcomes — an editor-only view tree-from-csv does not offer — there is one
+// per distinct outcome value (id = "outcome:" + outcome), pointed at by every row that has it.
+export function buildPlotGraph(doc, { mergeOutcomes = false } = {}) {
   const nodes = new Map();
   const children = new Map();
 
@@ -44,7 +46,7 @@ export function buildPlotGraph(doc) {
   };
 
   for (const node of doc.nodes) {
-    put({ id: node.id, tag: node.tag, stage: node.stage, synthetic: false, ownerId: node.id });
+    put({ id: node.id, tag: node.tag, stage: node.stage, synthetic: false, ownerId: node.id, owners: [node.id] });
   }
 
   // Real links, in document order.
@@ -56,16 +58,24 @@ export function buildPlotGraph(doc) {
     }
   }
 
-  // Outcome leaves, appended after the real children of their owner.
+  // Outcome leaves, appended after the real children of their owner. A merged
+  // outcome belongs to every row that has it, so it has owners but no single ownerId.
+  const merged = new Map();
   for (const node of doc.nodes) {
     if (node.outcome === '') continue;
-    const id = put({
-      id: node.id + node.outcome,
-      tag: node.outcome,
-      stage: OUTCOME_STAGE,
-      synthetic: true,
-      ownerId: node.id,
-    });
+    let id = merged.get(node.outcome);
+    if (id === undefined) {
+      id = put({
+        id: mergeOutcomes ? `outcome:${node.outcome}` : node.id + node.outcome,
+        tag: node.outcome,
+        stage: OUTCOME_STAGE,
+        synthetic: true,
+        ownerId: mergeOutcomes ? null : node.id,
+        owners: [],
+      });
+      if (mergeOutcomes) merged.set(node.outcome, id);
+    }
+    nodes.get(id).owners.push(node.id);
     children.get(node.id).push(id);
   }
 
@@ -173,8 +183,8 @@ function plotStages(maxDepth) {
 
 // layout turns a document into everything the renderer needs: stage bars, node
 // positions and link endpoints.
-export function layout(doc) {
-  const plot = buildPlotGraph(doc);
+export function layout(doc, options = {}) {
+  const plot = buildPlotGraph(doc, options);
   const { maxDepth, exhausted } = probeDepths(plot);
   const { stages, offsets, totalWidth } = plotStages(maxDepth);
   const stageIndex = new Map(stages.map((s) => [s.name, s]));
@@ -207,6 +217,7 @@ export function layout(doc) {
       color: stage ? stage.color : stageColor(0),
       synthetic: node.synthetic,
       ownerId: node.ownerId,
+      owners: node.owners,
     });
 
     const childX = x + H_SPACING;
@@ -239,8 +250,9 @@ export function layout(doc) {
         source,
         target,
         // Outcome links belong to the owner's outcome field, not to a source column.
+        // The owner is always the link's source, even when the outcome is merged.
         synthetic: plot.nodes.get(targetId).synthetic,
-        ownerId: plot.nodes.get(targetId).ownerId,
+        ownerId: plot.nodes.get(targetId).synthetic ? sourceId : targetId,
       });
     }
   }

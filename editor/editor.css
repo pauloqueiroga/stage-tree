@@ -51,6 +51,15 @@ body {
   gap: 6px;
 }
 
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
 button {
   font: inherit;
   padding: 5px 11px;

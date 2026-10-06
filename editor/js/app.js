@@ -27,6 +27,9 @@ const state = {
   // these, so they live only in the session.
   extraStages: [],
   fileName: 'stage-tree.csv',
+  // A view setting, not part of the document: draw one node per distinct outcome
+  // instead of one per row. The CSV is the same either way.
+  mergeOutcomes: false,
   selection: null,
   view: { x: 40, y: 30, zoom: 1 },
   undo: [],
@@ -99,6 +102,7 @@ function writeSave() {
       doc: state.doc,
       extraStages: state.extraStages,
       fileName: state.fileName,
+      mergeOutcomes: state.mergeOutcomes,
       view: state.view,
     }));
   } catch (err) {
@@ -128,6 +132,7 @@ function restore() {
     state.doc = saved.doc;
     state.extraStages = saved.extraStages ?? [];
     state.fileName = saved.fileName ?? 'stage-tree.csv';
+    state.mergeOutcomes = saved.mergeOutcomes === true;
     state.view = saved.view ?? state.view;
     return true;
   } catch (err) {
@@ -271,6 +276,20 @@ function deleteSelection() {
   const selection = state.selection;
   if (!selection) return;
 
+  if (selection.type === 'outcome') {
+    const owners = outcomeOwners(selection.value);
+    if (owners.length === 0) return;
+    commit((doc) => {
+      for (const node of doc.nodes) {
+        if (node.outcome === selection.value) node.outcome = '';
+      }
+    });
+    state.selection = null;
+    render();
+    toast(`Cleared outcome "${selection.value}" from ${owners.length} node(s).`, 'info');
+    return;
+  }
+
   if (selection.type === 'node') {
     const node = nodeById(state.doc, selection.id);
     if (!node) return;
@@ -306,6 +325,30 @@ function nodeLabel(id) {
   return node.tag === '' ? id : `${id} · ${node.tag}`;
 }
 
+// outcomeOwners lists the ids of the nodes carrying the given outcome, in document order.
+function outcomeOwners(value) {
+  return state.doc.nodes.filter((n) => n.outcome === value).map((n) => n.id);
+}
+
+function renderOutcomeProperties(value) {
+  const owners = outcomeOwners(value);
+  if (owners.length === 0) return [h('p', { class: 'hint' }, `No node has the outcome "${value}" any more.`)];
+  return [
+    h('div', { class: 'field' }, [
+      h('label', {}, 'Outcome'),
+      h('p', { class: 'value' }, value),
+    ]),
+    h('div', { class: 'field' }, [
+      h('label', {}, `Shared by (${owners.length})`),
+      h('ul', { class: 'chips' }, owners.map((id) => h('li', {}, [
+        h('button', { class: 'chip', onclick: () => select({ type: 'node', id }) }, nodeLabel(id)),
+      ]))),
+    ]),
+    h('p', { class: 'hint' }, 'Outcomes are merged into one node per value. To change one node\'s outcome, select that node.'),
+    h('button', { class: 'danger', onclick: deleteSelection }, owners.length === 1 ? 'Clear outcome' : `Clear from all ${owners.length} nodes`),
+  ];
+}
+
 function renderProperties() {
   const selection = state.selection;
 
@@ -313,12 +356,16 @@ function renderProperties() {
     return [h('p', { class: 'hint' }, 'Select a node or a link to edit it. Drag from one node to another to link them.')];
   }
 
+  if (selection.type === 'outcome') return renderOutcomeProperties(selection.value);
+
   if (selection.type === 'link') {
     const link = state.diagram.links.find((l) => l.id === selection.id);
     if (!link) return [h('p', { class: 'hint' }, 'That link is gone.')];
     if (link.synthetic) {
       return [
-        h('p', { class: 'hint' }, `This is the outcome of node ${link.ownerId}, not a source link. It comes from the outcome column and is drawn as its own node, the way tree-from-csv does it.`),
+        h('p', { class: 'hint' }, state.mergeOutcomes
+          ? `This is the outcome of node ${link.ownerId}, not a source link. It comes from the outcome column; every node with the same outcome points at the same outcome node.`
+          : `This is the outcome of node ${link.ownerId}, not a source link. It comes from the outcome column and is drawn as its own node.`),
         h('button', { class: 'danger', onclick: deleteSelection }, 'Clear outcome'),
       ];
     }
@@ -400,7 +447,9 @@ function renderProperties() {
         placeholder: 'e.g. pass, fail, declined',
         onchange: (e) => setField(node.id, 'outcome', e.target.value.trim()),
       }),
-      h('p', { class: 'hint' }, 'An outcome is drawn as an extra leaf in the "outcome" column.'),
+      h('p', { class: 'hint' }, state.mergeOutcomes
+        ? 'An outcome is drawn in the "outcome" column, as one node shared by every node with the same outcome.'
+        : 'An outcome is drawn as an extra leaf in the "outcome" column.'),
     ]),
 
     h('div', { class: 'field' }, [
@@ -452,7 +501,9 @@ function renderStagesPanel() {
   for (const node of state.doc.nodes) {
     counts.set(node.stage, (counts.get(node.stage) ?? 0) + 1);
   }
-  const hasOutcomes = state.doc.nodes.some((n) => n.outcome !== '');
+  const outcomes = state.doc.nodes.filter((n) => n.outcome !== '').map((n) => n.outcome);
+  // The count is how many nodes the outcome column holds, which is fewer once merged.
+  const outcomeCount = state.mergeOutcomes ? new Set(outcomes).size : outcomes.length;
 
   const rows = stages.map((name) => h('li', { class: 'stage-row' }, [
     h('span', { class: 'swatch', style: `background:${stageColorOf(name)}` }),
@@ -464,11 +515,11 @@ function renderStagesPanel() {
     h('span', { class: 'count', title: `${counts.get(name) ?? 0} node(s)` }, String(counts.get(name) ?? 0)),
   ]));
 
-  if (hasOutcomes) {
+  if (outcomeCount > 0) {
     rows.push(h('li', { class: 'stage-row is-locked' }, [
       h('span', { class: 'swatch', style: `background:${stageColorOf(OUTCOME_STAGE)}` }),
       h('span', { class: 'locked-name' }, OUTCOME_STAGE),
-      h('span', { class: 'count' }, String(state.doc.nodes.filter((n) => n.outcome !== '').length)),
+      h('span', { class: 'count', title: `${outcomeCount} node(s)` }, String(outcomeCount)),
     ]));
   }
 
@@ -510,7 +561,8 @@ function renderStatus() {
 // -------------------------------------------------------------------- render
 
 function render() {
-  state.diagram = layout(state.doc);
+  state.diagram = layout(state.doc, { mergeOutcomes: state.mergeOutcomes });
+  dom.mergeOutcomes.checked = state.mergeOutcomes;
   renderDiagram(shell, state.diagram, {
     selection: state.selection,
     view: state.view,
@@ -523,7 +575,7 @@ function render() {
 
 function fitToView() {
   const box = shell.svg.getBoundingClientRect();
-  const diagram = state.diagram ?? layout(state.doc);
+  const diagram = state.diagram ?? layout(state.doc, { mergeOutcomes: state.mergeOutcomes });
   const margin = 30;
   if (diagram.width <= 0 || diagram.height <= 0) return;
 
@@ -599,7 +651,14 @@ function bindCanvas() {
     }
 
     if (hit && hit.synthetic) {
-      select({ type: 'node', id: hit.owner });
+      // A per-row outcome selects the node it belongs to; a merged one has
+      // several owners, so it selects the outcome value itself.
+      if (hit.owner) {
+        select({ type: 'node', id: hit.owner });
+      } else {
+        const outcome = state.diagram.nodes.find((n) => n.id === hit.id);
+        select(outcome ? { type: 'outcome', value: outcome.tag } : null);
+      }
       return;
     }
 
@@ -808,6 +867,15 @@ function bindToolbar() {
   dom.redoButton = document.getElementById('btn-redo');
   dom.undoButton.addEventListener('click', undo);
   dom.redoButton.addEventListener('click', redo);
+
+  dom.mergeOutcomes = document.getElementById('opt-merge-outcomes');
+  dom.mergeOutcomes.addEventListener('change', () => {
+    state.mergeOutcomes = dom.mergeOutcomes.checked;
+    // A selected outcome value only exists as a node while outcomes are merged.
+    if (!state.mergeOutcomes && state.selection && state.selection.type === 'outcome') state.selection = null;
+    save();
+    render();
+  });
 
   const input = document.getElementById('file-input');
   document.getElementById('btn-import').addEventListener('click', () => input.click());
