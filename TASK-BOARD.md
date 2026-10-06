@@ -27,7 +27,7 @@ A lightweight Kanban-style board, version-controlled alongside the code.
 
 ## In Progress
 
-- Merged outcomes: an opt-in view that draws one node per distinct outcome value, with every row carrying that outcome pointing at it (editor only)
+(nothing right now)
 
 ## Won't Do
 
